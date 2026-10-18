@@ -50,7 +50,11 @@ I built it by hand in the AWS Console, in **eu-west-2 (London)**. This README wa
 
 **Why `/26`?** The VPC only has 256 addresses, so I split it into two halves of 64 (59 usable each, since AWS reserves 5 per subnet). That's plenty for this, and well above the minimum the ALB needs.
 
-📸 `screenshots/1-alb-vpc.png`, `screenshots/4-public-subnet-a.png`, `screenshots/5-public-subnet-b.png`
+![The alb-project-vpc VPC](screenshots/1-alb-vpc.png)
+
+![public-subnet-a in eu-west-2a](screenshots/4-public-subnet-a.png)
+
+![public-subnet-b in eu-west-2b](screenshots/5-public-subnet-b.png)
 
 ### Making the subnets actually public
 
@@ -64,7 +68,11 @@ I also turned on **auto-assign public IPv4** for both subnets, so that instances
 
 **Why this matters:** without the internet gateway and route, the ALB wouldn't be reachable from outside, and the EC2 instances couldn't download Apache during boot (so they'd fail health checks and I'd have no idea why).
 
-📸 `screenshots/6-igw.png`, `screenshots/7-route-table-routes.png`, `screenshots/8-route-table-subnet-assoc.png`
+![The internet gateway my-igw, attached to the VPC](screenshots/6-igw.png)
+
+![route-table-alb routes: 0.0.0.0/0 to the internet gateway](screenshots/7-route-table-routes.png)
+
+![route-table-alb subnet associations](screenshots/8-route-table-subnet-assoc.png)
 
 ---
 
@@ -82,7 +90,11 @@ I made two security groups, and the order mattered: ALB first, because the EC2 o
 
 **Why reference a security group instead of an IP range?** It says "only things wearing the ALB's security group can talk to me on port 80". ALB IP addresses change over time, so a CIDR rule would be fragile, whereas a security-group reference always stays correct. It's also what makes this assignment's key requirement true: the instances reject everything that doesn't come through the ALB.
 
-📸 `screenshots/2-alb-sg.png`, `screenshots/3ec2-sg.png` (note the `sg-...` source on the EC2 one)
+![alb-sg inbound rules](screenshots/2-alb-sg.png)
+
+![ec2-sg inbound rules](screenshots/3ec2-sg.png)
+
+*Note the `sg-...` source on the EC2 one: it points at the ALB's security group, not an IP range.*
 
 ---
 
@@ -106,7 +118,9 @@ I launched two `t3.micro` instances on Amazon Linux 2023:
 
 Both instances have **IMDSv2 required**, which is the safer way for them to read their own metadata. I made sure my user-data scripts use it (see below).
 
-📸 `screenshots/9-web-server-ec2-1.png`, `screenshots/10-web-server-ec2-2.png`
+![web-server-1 instance details](screenshots/9-web-server-ec2-1.png)
+
+![web-server-2 instance details](screenshots/10-web-server-ec2-2.png)
 
 ---
 
@@ -187,7 +201,7 @@ I created a target group called `web-tg`:
 
 Both targets went **Healthy**.
 
-📸 `screenshots/16-target-groups-healthy.png`
+![web-tg with both targets healthy](screenshots/16-target-groups-healthy.png)
 
 ---
 
@@ -207,7 +221,9 @@ I created `web-alb`:
 
 Once the state showed **Active**, AWS gave me a DNS name: `web-alb-1319740665.eu-west-2.elb.amazonaws.com`.
 
-📸 `screenshots/12-web-alb.png`, `screenshots/13-web-alb-listener-rule.png`
+![web-alb details: active, internet-facing, two AZs](screenshots/12-web-alb.png)
+
+![web-alb HTTP:80 listener forwarding to web-tg](screenshots/13-web-alb-listener-rule.png)
 
 ---
 
@@ -216,7 +232,9 @@ Once the state showed **Active**, AWS gave me a DNS name: `web-alb-1319740665.eu
 ### Does it load, and does it alternate?
 I opened the ALB's DNS name in the browser and refreshed. I got the **blue page, "Hello from Web Server 1"** (eu-west-2a), and on another refresh the **green page, "Hello from Web Server 2"** (eu-west-2b). Different instance IDs, different AZs, same URL, so the load balancer is spreading requests across both servers.
 
-📸 `screenshots/14-web-server-1-page.png`, `screenshots/15-web-server-2-page.png`
+![Web Server 1 page, served through the ALB](screenshots/14-web-server-1-page.png)
+
+![Web Server 2 page, served through the ALB](screenshots/15-web-server-2-page.png)
 
 ### Are the health checks healthy?
 Yes. Both targets in `web-tg` showed **Healthy** (see Step 5).
@@ -226,7 +244,7 @@ For fun (and because it proves the health check is doing real work), I **stopped
 
 > **Result:** Once the ALB's health check noticed server 1 had stopped answering, it marked that target unhealthy and quietly stopped sending it traffic. After that, only the green page (Web Server 2) came up, no matter how many times I refreshed. No errors, no manual changes on my side; the ALB just routed around the dead server.
 
-📸 `screenshots/16-web-server-1-stopped.png`
+![web-server-1 stopped in the EC2 console](screenshots/16-web-server-1-stopped.png)
 
 ### Direct access should NOT work
 The last requirement is that the instances aren't reachable on their own. Hitting an instance's public IP directly should simply time out, because `ec2-sg` only allows traffic from the ALB.
@@ -247,7 +265,9 @@ curl -m 5 -v http://18.175.190.113
 
 A timeout (rather than "connection refused") is exactly what I wanted to see. It means the packets are being silently dropped by the security group before they ever reach Apache, so as far as the internet is concerned there's nothing listening. The same pages load fine when I go through the ALB's DNS name, which confirms the ALB is the only way in.
 
-📸 `screenshots/17-web-server-1-connection-timeout.png`, `screenshots/18-web-server-2-connection-timeout.png`
+![Direct curl to web-server-1 times out](screenshots/17-web-server-1-connection-timeout.png)
+
+![Direct curl to web-server-2 times out](screenshots/18-web-server-2-connection-timeout.png)
 
 ---
 
