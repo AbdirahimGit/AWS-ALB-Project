@@ -50,7 +50,7 @@ I built it by hand in the AWS Console, in **eu-west-2 (London)**. This README wa
 
 **Why `/26`?** The VPC only has 256 addresses, so I split it into two halves of 64 (59 usable each, since AWS reserves 5 per subnet). That's plenty for this, and well above the minimum the ALB needs.
 
-![The alb-project-vpc VPC](screenshots/1-alb-vpc.png)
+![The alb-project-vpc VPC](screenshots/1- alb-vpc.png)
 
 ![public-subnet-a in eu-west-2a](screenshots/4-public-subnet-a.png)
 
